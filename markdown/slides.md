@@ -68,7 +68,8 @@ $: repo sync
 ## Preparing the build environment
 
 ~~~~{.bash}
-$: source setup-environment [build-directory]
+$: MACHINE=imx6qsabresd # other available machines are on sources/meta*/conf/machine*.conf
+$: source setup-environment build
 ~~~~
 
 ## Knowing the `local.conf` file
@@ -85,7 +86,7 @@ MACHINE ??= "imx6qsabresd"
 * List of available machines
 
 ~~~~{.bash}
-$: ls meta*/conf/machine/*.conf
+$: ls sources/meta*/conf/machine/*.conf
 ~~~~
 
 ## Building a target image
@@ -99,8 +100,17 @@ $: ls meta*/recipes*/images/*.bb
 * Build
 
 ~~~~{.bash}
-$: bitbake <image name>
-$: bitbake fsl-image-machine-test
+$: bitbake core-image-minimal
+~~~~
+
+* Flash a SD card (do not forget to umount any partitions when SD is inserted on host!)
+
+~~~~{.bash}
+$: sudo dd \
+    if=tmp/deploy/images/$MACHINE/core-image-minimal-imx6qsabresd.sdcard \
+    of=/dev/sdb \
+    bs=4M
+$: sync
 ~~~~
 
 ## Using Hob to bake an image
@@ -143,14 +153,15 @@ $: bitbake linux-imx -c listtasks
 $: bitbake -c <task> linux-imx
 ~~~~
 
-* To execute all
+* To execute all tasks
 
 ~~~~{.bash}
 $: bitbake linux-imx
 ~~~~
 
-# Temporal Build Directory
+# Temporaly Build Directory
 
+## `build/tmp` structure
 * `conf`: configuration files
 * `sstate-cache`: package data snapshots (needed to avoid recompilation)
 * `tmp`: temporal directory
@@ -183,13 +194,17 @@ $: bitbake linux-imx
 * Create the toolchain
 
 ~~~~{.bash}
-$: bitbake fsl-image-machine-test -c populate_sdk
+$: bitbake core-image-minimal -c populate_sdk
 ~~~~
 
 * Install the toolchain
 
 ~~~~{.bash}
-$: ./tmp/deploy/sdk/poky-eglibc-x86_64-core-image-minimal-cortexa9hf-vfp-neon-toolchain-1.6.1.sh
+$: ./tmp/deploy/sdk/poky-eglibc-x86_64-core-image-minimal-cortexa9hf-vfp-neon-toolchain-1.6.1.sh 
+Enter target directory for SDK (default: /opt/poky/1.6.1): 
+Extracting SDK...done
+Setting it up...done
+SDK has been successfully set up and is ready to be used.
 ~~~~
 
 ## Using the SDK
@@ -224,10 +239,16 @@ $: make <defconfig>
 $: make uImage
 ~~~~
 
-## Developing applications on target
+## Native compilation on target
 
 * The native build is prefered on newer microprocessors with more processing power and memory
 * Add `EXTRA_IMAGE_FEATURES += "dev-pkgs tools-sdk"` on your `build/conf/local.conf` file
+* Build and flash your image
+
+~~~~{.bash}
+$: bitbake core-image-minimal
+$: sudo dd if=tmp/deploy/images/$MACHINE/core-image-minimal-imx6qsabresd.sdcard of=/dev/sdb bs=4M;sync
+~~~~
 
 # Creating Custom Layers
 
@@ -288,18 +309,18 @@ $: mkdir -p meta-newlayer/recipes-my/images
 
 * Under `recipes-my/images`, you can create any image you want:
 
-  * `my-image.bb`: Same image as `fsl-image-machine-test` but including the `helloworld`
+  * `my-image.bb`: Same image as `core-image-minimal` but including the `helloworld`
     application
 
 ~~~~{.python}
-require recipes-fsl/images/fsl-image-machine-test.bb
+require recipes-core/images/core-image-minimal.bb
 CORE_IMAGE_EXTRA_INSTALL += "hello-world"
 ~~~~
 
-  * `my-image-dev.bb`: Same image as `fsl-image-machine-test` including development tools
+  * `my-image-dev.bb`: Same image as `core-image-minimal` including development tools
     allowing *native* compilation
 
 ~~~~{.python}
-require recipes-fsl/images/fsl-image-machine-test.bb
-IMAGE_FEATURES += "dev-pkgs tools-sdk ssh-server-dropbear tools-debug tools-profile"
+require recipes-core/images/core-image-minimal.bb
+IMAGE_FEATURES += "dev-pkgs tools-sdk tools-debug tools-profile"
 ~~~~
