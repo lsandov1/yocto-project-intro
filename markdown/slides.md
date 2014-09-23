@@ -269,9 +269,23 @@ New layer created in meta-newlayer.
 Don't forget to add it to your BBLAYERS (for details see meta-newlayer\README).
 ~~~~
 
+* In order to be taken into account, add the layer pathname into `conf/bblayers.conf`
+
+~~~~{.bash}
+echo "BBLAYERS += \"${BSPDIR}/sources/meta-newlayer\""
+~~~~
+
 ## Adding Metadata: a new package recipe
 
-Below recipe found on `meta-newlayer/recipes-example/example/example_0.1.bb`
+* The layer `meta-newlayer` has two recipes:
+
+    * `meta-newlayer/recipes-example/example/example_0.1.bb`
+    * `meta-newlayer/recipes-example-bbappend/example-bbappend/example_0.1.bbappend`
+
+* The `.bb` file corresponds to a new recipe and the `.bbappend` appends metadata to an
+  already implemented recipe.
+
+* `example_0.1.bb`:
 
 ~~~~{.python}
 #
@@ -307,7 +321,8 @@ do_install() {
 $: mkdir -p meta-newlayer/recipes-my/images
 ~~~~
 
-* Under `recipes-my/images`, you can create any image you want:
+* Under `recipes-my/images`, you can create any image you want. These are two
+  examples :
 
   * `my-image.bb`: Same image as `core-image-minimal` but including the `helloworld`
     application
@@ -323,4 +338,174 @@ CORE_IMAGE_EXTRA_INSTALL += "hello-world"
 ~~~~{.python}
 require recipes-core/images/core-image-minimal.bb
 IMAGE_FEATURES += "dev-pkgs tools-sdk tools-debug tools-profile"
+~~~~
+
+# Installing Packages
+
+
+
+## Listing the image's packages
+
+To know which packages are included on an image:
+
+~~~~{.bash}
+$: bitbake -g <image name>
+$: cat pn-depends.dot | \
+        grep -v -e '-native' | \
+        grep -v digraph | \
+        grep -v -e '-image' | \
+        awk '{print $1}' | \
+        sort | uniq
+~~~~
+
+The above command is quite long, so you can create a shell function 
+
+~~~~{.bash}
+$: image_packages () {
+cat pn-depends.dot | \
+grep -v -e '-native' | \
+grep -v digraph | \
+grep -v -e '-image' | \
+awk '{print $1}' | sort | uniq;\
+}
+~~~~
+
+Or using hob (not tested)
+
+~~~~{.bash}
+$: hob
+~~~~
+
+For example, using `bitbake`
+
+~~~~{.bash}
+$: bitbake -g core-image-minimal
+$: image_packages
+"acl"
+"attr"
+"base-files"
+"base-passwd"
+"bash"
+"binutils-cross"
+"busybox"
+"bzip2"
+"coreutils"
+"cryptodev-linux"
+.
+.
+.
+"udev"
+"update-rc.d"
+"usbutils"
+"util-linux"
+"util-macros"
+"xcb-proto"
+"xextproto"
+"xproto"
+"xtrans"
+"zlib"
+~~~~
+
+## Including Packages into your image
+
+* Before you start implementing new metadata, make sure it has not been already implemented.
+  There is a high chance that the application/library you are looking has been already 
+  _yoctonized_!
+
+* There are two places to start looking at:
+    1. Internally, in other words, inside your layers (under `sources`)
+    1. Outside [OpenEmbedded Metadata Index](http://layers.openembedded.org/layerindex/branch/master/layers/)
+
+
+## Internal recipes
+
+* These recipes are already on your host; to show ALL:
+
+~~~~{.bash}
+bitbake-layers show-recipes
+~~~~
+
+For example, let's include `htop`, an application to monitor memory and CPU usage
+
+~~~~{.bash}
+bitbake-layers show-recipes | grep htop
+~~~~
+
+* On your new layer, create a new image on `recipes-my/images/my-image-custom.bb` 
+  with this information
+
+~~~~{.python}
+require recipes-core/images/core-image-minimal.bb
+CORE_IMAGE_EXTRA_INSTALL += "htop"
+~~~~
+
+* Bake your image
+
+~~~~{.bash}
+$: bitbake my-image-custom
+~~~~
+
+* Flash
+
+~~~~{.bash}
+$: sudo dd \
+    if=tmp/deploy/images/$MACHINE/my-image-custom-imx6qsabresd.sdcard \
+    of=/dev/sdb \
+    bs=4M
+$: sync
+~~~~
+
+* Boot. On target, run `htop`
+
+## Outside recipes
+
+Main repository of [layers](http://layers.openembedded.org/layerindex/branch/master/layers/)
+
+1. Search for your layer
+2. Add the repo into `.repo/manifest.xml`
+
+~~~~{.bash}
+<remote fetch="<URL of the REPO>" name="<REPONAME>"/>
+<project remote="<REPONAME>" revision="<BRANCH>" name="<LAYERNAME>" path="sources/<LAYERNAME>"/>
+~~~~{.bash}
+
+3. Download the layer
+
+~~~~{.bash}
+$: repo sync
+~~~~
+
+4. Add the layer into `build/conf/bblayers.conf`
+
+~~~~{.bash}
+echo "BBLAYERS += \"${BSPDIR}/sources/<LAYERNAME>\""
+~~~~
+
+5. Include the recipe/package into `recipes-my/images/my-image-custom.bb` with this information
+
+~~~~{.python}
+require recipes-core/images/core-image-minimal.bb
+CORE_IMAGE_EXTRA_INSTALL += "htop <RECIPE NAME>"
+~~~~
+
+* Bake your image
+
+~~~~{.bash}
+$: bitbake my-image-custom
+~~~~
+
+* Flash
+
+~~~~{.bash}
+$: sudo dd \
+    if=tmp/deploy/images/$MACHINE/my-image-custom-imx6qsabresd.sdcard \
+    of=/dev/sdb \
+    bs=4M
+$: sync
+~~~~
+
+* Boot. On target, run the application
+
+~~~~{.bash}
+$: <binary installed by the recipe>
 ~~~~
